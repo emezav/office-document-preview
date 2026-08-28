@@ -7,6 +7,5 @@ scripts/**
 .github/**
 .gitignore
 .vscodeignore
-CHANGELOG.md
 **/.DS_Store
 **/Thumbs.db

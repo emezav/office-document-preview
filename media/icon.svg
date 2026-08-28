@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Source of media/icon.png. Regenerate with LibreOffice:
+
+    soffice - -headless - -convert-to png - -outdir media media/icon.svg
+    (written with a space above because XML forbids a double dash in a comment)
+
+  Design constraint, learned the hard way: the icon carries its OWN opaque
+  background. An icon drawn as dark ink on transparency looks right on the
+  Marketplace, which is light, and disappears in the VS Code sidebar, which is
+  dark. That is exactly how a university crest vanished inside this extension's
+  own preview. A filled tile reads the same on any surface.
+
+  Second constraint: it has to survive 32x32 in the sidebar, so there are four
+  shapes and no fine detail.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#6D28D9"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="128" height="128" rx="28" ry="28" fill="url(#tile)"/>
+
+  <path d="M 34 28 h 40 l 22 22 v 50 a 6 6 0 0 1 -6 6 h -56 a 6 6 0 0 1 -6 -6 v -66 a 6 6 0 0 1 6 -6 z"
+        fill="#FFFFFF"/>
+  <path d="M 74 28 l 22 22 h -16 a 6 6 0 0 1 -6 -6 z" fill="#C7D6F5"/>
+
+  <rect x="44" y="62" width="42" height="6" rx="3" fill="#94A9CC"/>
+  <rect x="44" y="76" width="42" height="6" rx="3" fill="#94A9CC"/>
+  <rect x="44" y="90" width="24" height="6" rx="3" fill="#F59E0B"/>
+</svg>
