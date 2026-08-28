@@ -1,0 +1,126 @@
+{
+  "name": "office-document-preview",
+  "displayName": "Office Document Preview",
+  "description": "Read-only preview of text documents, spreadsheets, slides and drawings inside a VS Code tab. Powered by a headless LibreOffice.",
+  "version": "0.0.1",
+  "publisher": "emezav",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/emezav/office-document-preview.git"
+  },
+  "keywords": [
+    "docx",
+    "xlsx",
+    "pptx",
+    "odt",
+    "ods",
+    "odp",
+    "libreoffice",
+    "spreadsheet",
+    "presentation",
+    "document",
+    "preview",
+    "viewer"
+  ],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./src/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "officeDocumentPreview.preview",
+        "displayName": "Office Document Preview",
+        "priority": "option",
+        "selector": [
+          { "filenamePattern": "*.odt" },
+          { "filenamePattern": "*.ott" },
+          { "filenamePattern": "*.doc" },
+          { "filenamePattern": "*.docx" },
+          { "filenamePattern": "*.dot" },
+          { "filenamePattern": "*.dotx" },
+          { "filenamePattern": "*.rtf" },
+          { "filenamePattern": "*.wpd" },
+          { "filenamePattern": "*.fodt" },
+          { "filenamePattern": "*.ods" },
+          { "filenamePattern": "*.ots" },
+          { "filenamePattern": "*.xls" },
+          { "filenamePattern": "*.xlsx" },
+          { "filenamePattern": "*.xlsm" },
+          { "filenamePattern": "*.fods" },
+          { "filenamePattern": "*.dif" },
+          { "filenamePattern": "*.odp" },
+          { "filenamePattern": "*.otp" },
+          { "filenamePattern": "*.ppt" },
+          { "filenamePattern": "*.pptx" },
+          { "filenamePattern": "*.fodp" },
+          { "filenamePattern": "*.odg" },
+          { "filenamePattern": "*.otg" },
+          { "filenamePattern": "*.vsd" },
+          { "filenamePattern": "*.vsdx" },
+          { "filenamePattern": "*.fodg" }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "officeDocumentPreview.open",
+        "title": "Office Document Preview: Open Preview"
+      },
+      {
+        "command": "officeDocumentPreview.openInLibreOffice",
+        "title": "Office Document Preview: Open in LibreOffice"
+      },
+      {
+        "command": "officeDocumentPreview.detectLibreOffice",
+        "title": "Office Document Preview: Locate the LibreOffice executable"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "officeDocumentPreview.open",
+          "when": "resourceExtname =~ /\\.(odt|ott|doc|docx|dot|dotx|rtf|wpd|fodt|ods|ots|xls|xlsx|xlsm|fods|dif|odp|otp|ppt|pptx|fodp|odg|otg|vsd|vsdx|fodg)$/i",
+          "group": "navigation@10"
+        },
+        {
+          "command": "officeDocumentPreview.openInLibreOffice",
+          "when": "resourceExtname =~ /\\.(odt|ott|doc|docx|dot|dotx|rtf|wpd|fodt|ods|ots|xls|xlsx|xlsm|fods|dif|odp|otp|ppt|pptx|fodp|odg|otg|vsd|vsdx|fodg)$/i",
+          "group": "navigation@20"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "officeDocumentPreview.open",
+          "when": "resourceExtname =~ /\\.(odt|ott|doc|docx|dot|dotx|rtf|wpd|fodt|ods|ots|xls|xlsx|xlsm|fods|dif|odp|otp|ppt|pptx|fodp|odg|otg|vsd|vsdx|fodg)$/i",
+          "group": "navigation@10"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Office Document Preview",
+      "properties": {
+        "officeDocumentPreview.sofficePath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Full path to the `soffice` executable. When set, it wins over automatic detection. Leave empty to search the usual install locations and then the `PATH`."
+        },
+        "officeDocumentPreview.conversionTimeoutMs": {
+          "type": "number",
+          "default": 30000,
+          "description": "Milliseconds to wait for a conversion before killing the LibreOffice process tree. A password-protected document blocks forever without this."
+        },
+        "officeDocumentPreview.warnAboveBytes": {
+          "type": "number",
+          "default": 20971520,
+          "description": "Ask before converting a source file larger than this many bytes. 0 disables the warning."
+        }
+      }
+    }
+  }
+}

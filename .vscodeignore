@@ -1,0 +1,12 @@
+# What does NOT go inside the .vsix.
+# vsce packages the WORKING DIRECTORY, not the git index, so a file git ignores is
+# still shipped unless it is listed here.
+private/**
+scripts/**
+.vscode/**
+.github/**
+.gitignore
+.vscodeignore
+CHANGELOG.md
+**/.DS_Store
+**/Thumbs.db
