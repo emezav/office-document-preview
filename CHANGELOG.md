@@ -27,5 +27,7 @@ First working version.
 - Conversions are serialised and hold a lock on the LibreOffice profile: two at once against the
   same profile make one of them fail silently.
 - Nothing is ever written back to the document being previewed.
-- Developed and verified on Windows. The macOS and Linux lookup paths are implemented but have not
-  been exercised yet.
+- Verified on Windows 11 with LibreOffice 26.2, and on Ubuntu 22.04 with the distribution's
+  LibreOffice 7.3 -- installed from source and from a packaged `.vsix`. macOS is implemented but has
+  not been exercised. Neither have the snap and flatpak builds of LibreOffice, whose sandbox is
+  detected and explained but never tested.

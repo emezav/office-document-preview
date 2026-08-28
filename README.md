@@ -53,6 +53,12 @@ because the standard Windows installer does *not* put it on the `PATH`. If it ca
 | macOS | `/Applications/LibreOffice.app/Contents/MacOS/soffice` |
 | Linux | the `PATH`, then `/usr/lib/libreoffice/program`, snap and flatpak locations |
 
+**Any reasonably recent LibreOffice works.** Verified on Windows 11 with 26.2 and on Ubuntu 22.04
+with the distribution's 7.3 -- versions years apart, converting the same documents identically. What
+has *not* been exercised: macOS, and the snap and flatpak builds, whose sandbox cannot read files
+outside your home directory. The extension detects that case and says so rather than failing
+mysteriously, but nobody has run it.
+
 ## Settings
 
 | Setting | Default | What it does |
