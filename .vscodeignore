@@ -1,6 +1,8 @@
 # What does NOT go inside the .vsix.
 # vsce packages the WORKING DIRECTORY, not the git index, so a file git ignores is
 # still shipped unless it is listed here.
+# Las capturas viajan al repositorio pero NO al paquete: la ficha las carga por URL.
+media/screenshots/**
 private/**
 scripts/**
 .vscode/**

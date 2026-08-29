@@ -3,8 +3,16 @@
 Read-only preview of text documents, spreadsheets, slides and drawings inside a VS Code tab,
 rendered by a headless LibreOffice. No window opens unless you ask for one.
 
-> **Status: working prototype.** It previews documents, spreadsheets and presentations today. It is
-> not published on the Marketplace yet, and there are known gaps -- see [Known limitations](#known-limitations).
+> **Status: stable.** Everything it set out to do is in and verified -- three render routes, viewer
+> tools, a conversion cache and a size-aware timeout -- with **no known defects** and 122 automated
+> checks running against real documents.
+>
+> Verified on Windows 11 with LibreOffice 26.2, and from a packaged `.vsix` on Ubuntu 22.04 with 7.3
+> and Fedora 44 with 26.2 -- versions years apart, converting identically. **Not yet exercised:**
+> macOS, and the snap and flatpak builds, whose sandbox is detected and explained but never tested.
+> What the extension deliberately does not do is in [Known limitations](#known-limitations).
+
+![A Word document previewed in a VS Code tab, with its header, title and page controls](media/screenshots/preview_document.png)
 
 ## What it does
 
@@ -19,6 +27,16 @@ LibreOffice's interface.
 | Slides | `odp` `ppt` `pptx` ... | One slide per page, with paging and zoom |
 | Drawings | `odg` `vsd` `vsdx` ... | Rendered as pages |
 
+**Spreadsheets get one tab per sheet**, which is why they do not go through PDF: paginating a sheet
+is the opposite of navigating it, and a copied selection would paste as flat text instead of a grid.
+
+![A spreadsheet previewed with one tab per sheet](media/screenshots/preview_sheets.png)
+
+**Slides keep their backgrounds, images and layout**, because they are rendered from PDF rather than
+from an HTML dump.
+
+![A presentation previewed slide by slide, with paging controls](media/screenshots/preview_slides.png)
+
 Every view zooms the same way -- the `-` / `+` / `Fit` buttons, `Ctrl` with the mouse wheel, or
 `Ctrl` `+` / `-` / `0`. The **Select / Pan** button switches between selecting text and dragging the
 page around; the middle mouse button drags in either mode. Text is selectable everywhere, including
@@ -32,6 +50,10 @@ hundred formats, and a wrong guess only costs a failed conversion with a clear m
 
 A **Paper / Editor theme** button switches between the document's own colours on white paper and the
 editor's theme. Paper is the default, because exported office documents assume white paper.
+
+| Paper | Editor |
+| --- | --- |
+| ![The same sheet on white paper](media/screenshots/theme_paper.png) | ![The same sheet in the editor theme](media/screenshots/theme_editor.png) |
 
 **Open externally** hands the document to your system's default application, for when you need to do
 something a preview cannot do. For a format your system has nothing registered for -- common with
@@ -86,6 +108,10 @@ So the budget is a base plus an allowance per megabyte, capped. Size is only a p
 deck takes *longer* than the 13.4 MB one because it has more slides -- so the allowance is generous.
 The ceiling is what still catches a conversion that is stuck rather than slow: a password-protected
 document waits for a prompt that never appears. **Every one of those numbers is a setting.**
+
+While a conversion runs, the tab says so and counts, rather than sitting blank:
+
+![The waiting screen, counting the seconds and saying when it will give up](media/screenshots/waiting.png)
 
 **Converted documents are cached, so reopening a tab is instant.** The key is the file's
 SHA-256, which is what makes the invalidation exact rather than approximate: edit the document

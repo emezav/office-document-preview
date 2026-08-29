@@ -19,6 +19,16 @@
         "--extensionDevelopmentPath=${workspaceFolder}",
         "${workspaceFolder}/private/samples"
       ]
+    },
+    {
+      "name": "Run extension (demo documents, for screenshots)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "--disable-extensions",
+        "${workspaceFolder}/private/demo"
+      ]
     }
   ]
 }

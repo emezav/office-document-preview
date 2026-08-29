@@ -2,9 +2,13 @@
 
 All notable changes to this extension are documented here.
 
-## [0.0.1] - Unreleased
+## [0.1.0] - 2026-08-29
 
-First working version.
+First public release.
+
+Everything below has been exercised against real documents, not synthetic fixtures: a headless test
+bench runs 122 checks, and the extension has been installed from a packaged `.vsix` on two Linux
+distributions with LibreOffice versions years apart.
 
 ### Added
 

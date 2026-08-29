@@ -2,7 +2,7 @@
   "name": "office-document-preview",
   "displayName": "Office Document Preview",
   "description": "Read-only preview of text documents, spreadsheets, slides and drawings inside a VS Code tab. Powered by a headless LibreOffice.",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "publisher": "emezav",
   "license": "MIT",
   "icon": "media/icon.png",
