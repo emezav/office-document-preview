@@ -64,8 +64,35 @@ mysteriously, but nobody has run it.
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `officeDocumentPreview.sofficePath` | `""` | Full path to `soffice`. Wins over automatic detection. |
-| `officeDocumentPreview.conversionTimeoutMs` | `30000` | How long to wait before killing the LibreOffice process tree. |
+| `officeDocumentPreview.conversionTimeoutMs` | `90000` | Base time allowed for a conversion. |
+| `officeDocumentPreview.conversionTimeoutPerMegabyteMs` | `15000` | Extra time per megabyte. Set to `0` for a flat timeout. |
+| `officeDocumentPreview.conversionTimeoutMaxMs` | `600000` | Ceiling for the whole budget. |
+| `officeDocumentPreview.cacheEnabled` | `true` | Reuse a conversion when the document has not changed. |
+| `officeDocumentPreview.cacheMaxBytes` | `536870912` | Disk budget for the cache. `0` keeps it empty. |
+| `officeDocumentPreview.cacheMaxAgeDays` | `30` | Drop cached conversions unused for this long. `0` never expires them. |
 | `officeDocumentPreview.warnAboveBytes` | `20971520` | Ask before converting a file larger than this. |
+
+**The conversion budget is not one number, because conversion time is not one number.**
+Measured on this extension's own test documents:
+
+| Document | Size | Time |
+| --- | --- | --- |
+| Spreadsheet, 5000 rows | 317 KB | 1.8 s |
+| Text document, 11 pages | 620 KB | 3.3 s |
+| Presentation, 13 slides | 13.4 MB | 33 s native, 73 s in a VM |
+| Presentation, 23 slides | 10.6 MB | 42 s |
+
+So the budget is a base plus an allowance per megabyte, capped. Size is only a proxy -- the 10.6 MB
+deck takes *longer* than the 13.4 MB one because it has more slides -- so the allowance is generous.
+The ceiling is what still catches a conversion that is stuck rather than slow: a password-protected
+document waits for a prompt that never appears. **Every one of those numbers is a setting.**
+
+**Converted documents are cached, so reopening a tab is instant.** The key is the file's
+SHA-256, which is what makes the invalidation exact rather than approximate: edit the document
+and its entry is replaced immediately, while touching, copying or moving a file that has not
+changed keeps the work. Hashing costs milliseconds against the seconds above. The cache is
+cleaned two ways -- entries unused for `cacheMaxAgeDays` are swept when the extension starts,
+and the least recently used are dropped when `cacheMaxBytes` is exceeded.
 
 ## Running it from source
 

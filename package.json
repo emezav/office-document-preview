@@ -117,8 +117,33 @@
         },
         "officeDocumentPreview.conversionTimeoutMs": {
           "type": "number",
-          "default": 30000,
-          "description": "Milliseconds to wait for a conversion before killing the LibreOffice process tree. A password-protected document blocks forever without this."
+          "default": 90000,
+          "markdownDescription": "Base milliseconds to wait for a conversion before killing the LibreOffice process tree. Time is added per megabyte on top of this; see `#officeDocumentPreview.conversionTimeoutPerMegabyteMs#`. The base has to cover LibreOffice's first run, which costs 17 to 20 seconds however small the document."
+        },
+        "officeDocumentPreview.conversionTimeoutPerMegabyteMs": {
+          "type": "number",
+          "default": 15000,
+          "markdownDescription": "Extra milliseconds allowed per megabyte of the source file. Conversion time grows with the document: a 317 KB spreadsheet takes under 2 seconds, while a 13 MB presentation takes 33 seconds on a native machine and 73 in a virtual one. Set to `0` for a flat timeout that ignores size."
+        },
+        "officeDocumentPreview.conversionTimeoutMaxMs": {
+          "type": "number",
+          "default": 600000,
+          "description": "Ceiling for the whole budget, however large the document. This is what still catches a conversion that is genuinely stuck rather than slow: a password-protected document waits for a prompt that never appears, and would otherwise wait for ever. Raise it if you routinely open very large documents."
+        },
+        "officeDocumentPreview.cacheEnabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Keep converted documents so that closing and reopening a tab does not convert them again. The cache is keyed by the file's **SHA-256**, so editing a document invalidates its entry immediately and the previous conversion is deleted; touching or moving a file that has not changed keeps it."
+        },
+        "officeDocumentPreview.cacheMaxBytes": {
+          "type": "number",
+          "default": 536870912,
+          "description": "Disk budget for the conversion cache, in bytes. When it is exceeded, the entries nobody has opened in longest are removed first. 0 empties the cache and keeps it empty."
+        },
+        "officeDocumentPreview.cacheMaxAgeDays": {
+          "type": "number",
+          "default": 30,
+          "description": "Delete cached conversions that have not been opened for this many days. Swept once when the extension starts. 0 disables the age limit and leaves only the size budget."
         },
         "officeDocumentPreview.warnAboveBytes": {
           "type": "number",

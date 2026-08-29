@@ -23,7 +23,7 @@ const ROOT = path.resolve(__dirname, '..');
 // stack trace and the "Syntax" step could never actually fail for them -- it only ever
 // checked extension.js, the one module it does not import. They are loaded after the
 // syntax step instead.
-let locateSoffice, ConversionQueue, convertOnce, runConversion, acquireProfileLock, lockPathFor, renderMod;
+let locateSoffice, ConversionQueue, timeoutFor, convertOnce, runConversion, acquireProfileLock, lockPathFor, renderMod, cacheMod;
 
 let failures = 0;
 function check(label, ok, detail) {
@@ -47,7 +47,7 @@ async function main() {
   console.log('Node: ' + process.version);
   console.log('\n1. Syntax');
   let syntaxOk = true;
-  for (const f of ['extension.js', 'locate.js', 'convert.js', 'render.js']) {
+  for (const f of ['extension.js', 'locate.js', 'convert.js', 'render.js', 'cache.js']) {
     const err = syntaxCheck(path.join(ROOT, 'src', f));
     if (err) syntaxOk = false;
     check('src/' + f, err === null, err || '');
@@ -58,10 +58,11 @@ async function main() {
     return;
   }
   ({ locateSoffice } = require(path.join(ROOT, 'src', 'locate')));
-  ({ ConversionQueue, convertOnce, runConversion, acquireProfileLock, lockPathFor } = require(
+  ({ ConversionQueue, timeoutFor, convertOnce, runConversion, acquireProfileLock, lockPathFor } = require(
     path.join(ROOT, 'src', 'convert')
   ));
   renderMod = require(path.join(ROOT, 'src', 'render'));
+  cacheMod = require(path.join(ROOT, 'src', 'cache'));
 
   console.log('\n2. Locating LibreOffice');
   const located = locateSoffice('');
@@ -86,12 +87,30 @@ async function main() {
   // private/ is git-ignored: the fixtures stay on the author's disk and never reach the
   // repository. A fresh clone has no samples, so this degrades instead of crashing.
   const samplesDir = path.join(ROOT, 'private', 'samples');
-  let samples = [];
-  try {
-    samples = fs.readdirSync(samplesDir).filter((f) => !f.startsWith('.'));
-  } catch (_) {
-    samples = [];
+  // Recursive, and DIRECTORIES ARE NOT DOCUMENTS. The flat version handed the name of
+  // a subdirectory to LibreOffice, which reported "no usable output (exit code 1)" --
+  // a failure that reads exactly like a broken conversion. It appeared the moment the
+  // big presentations were filed under samples/big/ instead of beside the others.
+  function collect(dir, prefix) {
+    const out = [];
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch (_) {
+      return out;
+    }
+    for (const e of entries) {
+      if (e.name.startsWith('.')) continue;
+      const rel = prefix ? prefix + '/' + e.name : e.name;
+      if (e.isDirectory()) {
+        out.push(...collect(path.join(dir, e.name), rel));
+      } else {
+        out.push(rel);
+      }
+    }
+    return out;
   }
+  const samples = collect(samplesDir, '');
   if (!samples.length) {
     console.log('  [SKIP] no fixtures in private/samples/ -- steps 4 to 6 need documents to convert.');
     console.log('\n' + (failures === 0 ? 'All checks passed (conversion steps skipped).' : failures + ' check(s) failed.'));
@@ -204,6 +223,22 @@ async function main() {
       check('CSP allows fetching the PDF', /connect-src vscode-webview:\/\/fake/.test(html), '');
       check('CSP still forbids everything external', /default-src 'none'/.test(html) && !/https?:/.test(html.slice(0, 1200)), '');
       check('the module script is type="module"', /<script type="module" nonce=/.test(html), '');
+      // A minute of silence and a hang look identical. The wait has to count itself.
+      const busy = renderMod.renderBusy(fakeWebview, 'x.pptx', 231000);
+      check('the wait shows elapsed time', busy.includes('lop-elapsed') && busy.includes('setInterval'), '');
+      check('the wait says when it gives up', busy.includes('231 s'), '');
+      check('the wait names the document', busy.includes('x.pptx'), '');
+      // The tab must never be empty while something is happening. The waiting screen
+      // is assigned before anything that can block -- locating soffice, or a dialog.
+      const extSrc2 = fs.readFileSync(path.join(ROOT, 'src', 'extension.js'), 'utf8');
+      const optionsAt = extSrc2.indexOf('panel.webview.options');
+      const busyAt = extSrc2.indexOf('render.renderBusy');
+      const runAt = extSrc2.indexOf('const run = () =>');
+      check(
+        'the waiting screen goes up before anything can block',
+        busyAt > optionsAt && busyAt < runAt,
+        ''
+      );
       // A module that fails to LOAD never runs, so its own try/catch catches nothing.
       // The reporter is a plain script for exactly that reason, and it must come first.
       check('a plain-script failure reporter is installed', html.includes('__lopFail'), '');
@@ -377,6 +412,174 @@ async function main() {
       .map((i) => i.when || '');
     const uncovered = selectors.filter((ext) => whenClauses.some((w) => w && !w.includes('|' + ext + '|') && !w.includes('(' + ext + '|') && !w.includes('|' + ext + ')')));
     check('menu when-clauses cover every claimed extension', uncovered.length === 0, uncovered.join(', '));
+  }
+
+  console.log('\n7b. The conversion budget covers what was actually measured');
+  {
+    // Every row is a real measurement, not an invented case. The budget must clear
+    // each one with room, or the extension kills a conversion that would have
+    // finished -- which is exactly what happened to a 13.4 MB deck at the old 30 s.
+    const MB = 1024 * 1024;
+    const measured = [
+      { what: 'csv 5000x12', bytes: 0.31 * MB, took: 1.8 },
+      { what: 'docx 11 pages', bytes: 0.61 * MB, took: 3.3 },
+      { what: 'pptx 11 slides', bytes: 0.81 * MB, took: 5.0 },
+      { what: 'pptx MQTT, native', bytes: 13.4 * MB, took: 32.8 },
+      { what: 'pptx MQTT, virtual machine', bytes: 13.4 * MB, took: 72.7 },
+      { what: 'pptx Metrex, 23 slides', bytes: 10.6 * MB, took: 41.7 },
+    ];
+    for (const m of measured) {
+      const budget = timeoutFor(m.bytes, 90000, 15000, 600000) / 1000;
+      check(
+        'budget clears ' + m.what,
+        budget > m.took * 1.5,
+        budget.toFixed(0) + ' s allowed vs ' + m.took + ' s measured'
+      );
+    }
+    check('an unreadable file still gets the base', timeoutFor(0, 90000, 15000, 600000) === 90000, '');
+    // A hang is still caught: without a ceiling a huge file would wait for ever.
+    check('the budget has a ceiling', timeoutFor(500 * MB, 90000, 15000, 600000) === 600000, '10 min');
+    // Every number a user might need is a setting, the ceiling included.
+    check('the ceiling is not hardcoded', timeoutFor(500 * MB, 90000, 15000, 900000) === 900000, 'raised to 15 min');
+    check('per-megabyte can be switched off', timeoutFor(50 * MB, 90000, 0, 600000) === 90000, 'flat timeout');
+  }
+
+  console.log('\n7c. The conversion cache');
+  {
+    const root = path.join(os.tmpdir(), 'office-document-preview', 'cache-test');
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.mkdirSync(root, { recursive: true });
+
+    const docA = path.join(root, 'a.bin');
+    fs.writeFileSync(docA, 'hello world');
+    const h1 = cacheMod.hashFile(docA);
+    check('the hash is a sha256', /^[0-9a-f]{64}$/.test(h1), h1.slice(0, 16) + '...');
+    // Same bytes, same key: this is what makes reopening a tab free.
+    check('the same bytes hash the same', cacheMod.hashFile(docA) === h1, '');
+    // CONTROL: a detector that always returned the same string would pass the line
+    // above and be useless. It has to CHANGE when the document does.
+    fs.writeFileSync(docA, 'hello worlds');
+    const h2 = cacheMod.hashFile(docA);
+    check('changing the file changes the hash', h2 !== h1, 'the invalidation signal');
+    // The intermediate format is part of the key: the same bytes wanted as PDF and as
+    // HTML are two different entries, and serving one for the other looks like a
+    // corrupt document rather than a cache bug.
+    check('the format is part of the key', cacheMod.keyFor(h2, 'pdf') !== cacheMod.keyFor(h2, 'html'), '');
+
+    // A miss is a miss, and must not throw: the cache is an optimisation.
+    check('an unknown key misses', cacheMod.lookup(root, cacheMod.keyFor(h2, 'pdf')) === null, '');
+
+    // Store one, then read it back.
+    const src = 'C:/docs/report.docx';
+    const keyOld = cacheMod.keyFor(h1, 'pdf');
+    const from1 = path.join(root, 'tmp1');
+    fs.mkdirSync(from1, { recursive: true });
+    fs.writeFileSync(path.join(from1, 'report.pdf'), 'PDF-1');
+    const stored1 = cacheMod.commit(root, keyOld, from1, path.join(from1, 'report.pdf'), {
+      source: src, hash: h1, outExt: 'pdf', at: Date.now(),
+    });
+    check('a finished conversion is stored', Boolean(stored1), stored1 ? 'stored' : 'commit returned null');
+    const hit = cacheMod.lookup(root, keyOld);
+    check('a stored conversion is found again', Boolean(hit), '');
+    check('the hit points at the converted file', Boolean(hit) && fs.readFileSync(hit.outPath, 'utf8') === 'PDF-1', '');
+    // Sibling files travel with the page: the HTML route emits PNGs referenced by
+    // relative name, and separating them breaks every image at once.
+    check('the whole directory travels', Boolean(hit) && fs.existsSync(path.join(hit.dir, 'entry.json')), '');
+
+    // The document changes: the new conversion is stored and THE OLD ONE IS DELETED,
+    // which is the behaviour that was asked for by name.
+    const keyNew = cacheMod.keyFor(h2, 'pdf');
+    const from2 = path.join(root, 'tmp2');
+    fs.mkdirSync(from2, { recursive: true });
+    fs.writeFileSync(path.join(from2, 'report.pdf'), 'PDF-2');
+    cacheMod.commit(root, keyNew, from2, path.join(from2, 'report.pdf'), {
+      source: src, hash: h2, outExt: 'pdf', at: Date.now(),
+    });
+    const dropped = cacheMod.dropOthersFor(root, src, keyNew);
+    check('the previous conversion of the same file is dropped', dropped.indexOf(keyOld) >= 0, dropped.join(', '));
+    check('the current one survives', Boolean(cacheMod.lookup(root, keyNew)), '');
+    check('the stale one is gone', cacheMod.lookup(root, keyOld) === null, '');
+    // CONTROL: dropOthersFor must not be a "delete everything else". An entry from a
+    // DIFFERENT document has to survive.
+    const other = cacheMod.keyFor('f'.repeat(64), 'pdf');
+    const from3 = path.join(root, 'tmp3');
+    fs.mkdirSync(from3, { recursive: true });
+    fs.writeFileSync(path.join(from3, 'other.pdf'), 'PDF-3');
+    cacheMod.commit(root, other, from3, path.join(from3, 'other.pdf'), {
+      source: 'C:/docs/other.docx', hash: 'f'.repeat(64), outExt: 'pdf', at: Date.now(),
+    });
+    cacheMod.dropOthersFor(root, src, keyNew);
+    check('another document is not dropped with it', Boolean(cacheMod.lookup(root, other)), '');
+
+    // The budget evicts, and 0 means empty rather than "keep what is already there".
+    const roomy = cacheMod.prune(root, 1024 * 1024);
+    check('a budget with room removes nothing', roomy.removed.length === 0, roomy.before + ' bytes held');
+    const emptied = cacheMod.prune(root, 0);
+    check('a budget of zero empties the cache', cacheMod.lookup(root, keyNew) === null, emptied.removed.length + ' entries removed');
+
+    // Age, which answers a different question than the budget: the budget caps what is
+    // still in use, age removes what has fallen out of use. Without it, a cache built
+    // from documents the user has stopped opening is never looked at again, because
+    // pruning only runs when a conversion is committed.
+    const aged = path.join(root, 'aged');
+    fs.mkdirSync(aged, { recursive: true });
+    const mk = (name, ageDays) => {
+      const from = path.join(root, 'mk-' + name);
+      fs.mkdirSync(from, { recursive: true });
+      fs.writeFileSync(path.join(from, 'x.pdf'), 'PDF');
+      cacheMod.commit(aged, name, from, path.join(from, 'x.pdf'), {
+        source: 'C:/docs/' + name + '.docx', hash: name, outExt: 'pdf', at: Date.now(),
+      });
+      const when = new Date(Date.now() - ageDays * 24 * 60 * 60 * 1000);
+      fs.utimesSync(path.join(aged, name), when, when);
+    };
+    mk('old', 40);
+    mk('fresh', 2);
+    const swept = cacheMod.sweepAged(aged, 30 * 24 * 60 * 60 * 1000);
+    check('an entry unused past the limit is swept', swept.removed.indexOf('old') >= 0, swept.removed.join(', '));
+    // CONTROL: a sweep that deleted everything would pass the line above and be a bug.
+    check('a recently used entry survives the sweep', fs.existsSync(path.join(aged, 'fresh')), '');
+    // age is measured from last use: lookup touches the entry, so a document opened
+    // every week is never evicted for being old.
+    check('the sweep counts entries it kept', swept.kept === 1, String(swept.kept));
+    check('a limit of zero disables the sweep', cacheMod.sweepAged(aged, 0).removed.length === 0, 'no age limit');
+
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+
+  console.log('\n7d. The conversion is not awaited inside resolveCustomEditor');
+  {
+    // The defect this replaces was invisible to every check the bench had: the waiting
+    // screen was built correctly, assigned correctly, and never painted, because VS Code
+    // does not present the webview until resolveCustomEditor resolves. Awaiting the
+    // conversion there means the tab stays blank for the whole conversion and the
+    // finished preview appears all at once.
+    const extSrc = fs.readFileSync(path.join(ROOT, 'src', 'extension.js'), 'utf8');
+    const resolveAt = extSrc.indexOf('async resolveCustomEditor');
+    const bodyEnd = extSrc.indexOf('async convertAndShow');
+    check('resolveCustomEditor exists', resolveAt > 0 && bodyEnd > resolveAt, '');
+    const body = extSrc.slice(resolveAt, bodyEnd);
+    check('it does not await the conversion', !/await\s+run\(\)/.test(body), '');
+    check('it starts the conversion anyway', /run\(\)\s*\.catch/.test(body), '');
+    // CONTROL: a detector that never matches would pass the line above while being
+    // worthless. It has to recognise the shape that caused the defect.
+    check('the detector recognises the old shape', /await\s+run\(\)/.test('    await run();'), 'positive control');
+
+    // A module that src/ requires but publish.js does not copy produces a public
+    // repository that cannot even load the extension -- and nothing here would notice,
+    // because the development copy has the file. The allowlist is deliberate, so the
+    // check is that it is COMPLETE, not that it is generated.
+    const pub = fs.readFileSync(path.join(ROOT, 'scripts', 'publish.js'), 'utf8');
+    const listed = (pub.match(/'src\/[a-z]+\.js'/g) || []).map((q) => q.slice(1, -1));
+    const onDisk = fs.readdirSync(path.join(ROOT, 'src')).filter((f) => f.endsWith('.js')).map((f) => 'src/' + f);
+    const unpublished = onDisk.filter((f) => listed.indexOf(f) < 0);
+    check('every module in src/ is on the publish list', unpublished.length === 0, unpublished.join(', '));
+    // CONTROL: the comparison has to be able to see a missing module.
+    check(
+      'the comparison would notice a missing module',
+      ['src/a.js', 'src/b.js'].filter((f) => ['src/a.js'].indexOf(f) < 0).length === 1,
+      'positive control'
+    );
   }
 
   console.log('\n8. Profile lock semantics');

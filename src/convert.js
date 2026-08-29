@@ -130,6 +130,40 @@ async function acquireProfileLock(profileDir, waitMs, staleAfterMs) {
   }
 }
 
+// How long to wait before deciding LibreOffice is stuck.
+//
+// A flat number is the wrong shape, and the original 30 s was picked without any
+// data. Measured: a 317 KB spreadsheet converts in 1.8 s and a 13.4 MB presentation
+// in 32.8 s on a native machine and 72.7 s in a virtual one -- and the big one
+// FINISHES, it is not stuck. One figure is either too short for the large documents
+// or absurd for the small ones, so the budget scales.
+//
+// Size is a PROXY, not the cause: a 10.6 MB deck of 23 slides took 41.7 s while a
+// 13.4 MB deck of 13 slides took 32.8 s. Page count drives the work. Bytes are what
+// can be known before opening the file, so bytes is what the budget uses -- with
+// enough margin to absorb being wrong about it.
+//
+// The base also absorbs LibreOffice's first run, which costs 17 to 20 s whatever the
+// document. That cannot be paid in advance: --terminate_after_init returns in 0.6 s
+// and creates a partial profile, but the next conversion is just as slow. Measured,
+// and it is why there is no warm-up anywhere in this extension.
+//
+// Pure on purpose: this is the part worth checking, and extension.js cannot be
+// loaded outside the extension host.
+function timeoutFor(bytes, baseMs, perMegabyteMs, maxMs) {
+  // NOT `value || default`: zero is a legitimate setting here -- it is how a user
+  // asks for a flat timeout that ignores size -- and `||` would silently replace it
+  // with the default. The bench caught exactly that.
+  const num = (v, dflt) => (typeof v === 'number' && isFinite(v) && v >= 0 ? v : dflt);
+  const megabytes = Math.max(0, num(bytes, 0)) / (1024 * 1024);
+  const wanted = num(baseMs, 90000) + Math.round(num(perMegabyteMs, 15000) * megabytes);
+  // The ceiling is what still catches the real hang: a password-protected document
+  // waits for a prompt that never comes, and would otherwise wait for ever. It is a
+  // setting like the others -- a 100 MB document legitimately wants more than the
+  // default, and nothing here should be a number only the author can change.
+  return Math.min(wanted, num(maxMs, 600000));
+}
+
 function killTree(child) {
   if (!child || child.killed || child.exitCode !== null) {
     return;
@@ -231,7 +265,19 @@ function runConversion(opts) {
     child.on('close', (code) => {
       clearTimeout(timer);
       if (timedOut) {
-        reject({ kind: 'timeout', message: 'The conversion exceeded ' + opts.timeoutMs + ' ms.', stderr });
+        let megabytes = 0;
+        try {
+          megabytes = fs.statSync(opts.srcPath).size / (1024 * 1024);
+        } catch (_) {
+          megabytes = 0;
+        }
+        reject({
+          kind: 'timeout',
+          // Seconds, not milliseconds: nobody reads 285000 as "four and a half minutes".
+          message: 'LibreOffice was given ' + Math.round(opts.timeoutMs / 1000) + ' seconds and did not finish.',
+          megabytes,
+          stderr,
+        });
         return;
       }
       // Deliberately not looking at `code`: it reports 1 on success and 0 on failure.
@@ -310,6 +356,7 @@ class ConversionQueue {
 
 module.exports = {
   ConversionQueue,
+  timeoutFor,
   convertOnce,
   toFileUrl,
   acquireProfileLock,

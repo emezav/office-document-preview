@@ -760,8 +760,30 @@ function renderMessage(webview, title, bodyHtml) {
   return shell(webview, nonce, '<div class="lop-message"><h2>' + escapeHtml(title) + '</h2>' + bodyHtml + '</div>', '');
 }
 
-function renderBusy(webview, label) {
-  return renderMessage(webview, 'Converting with LibreOffice...', '<p>' + escapeHtml(label) + '</p>');
+// A conversion can take over a minute on a big document, and the first one of all
+// pays LibreOffice's initialisation on top. Without a moving number, slow and broken
+// look identical -- so the wait counts itself, and says out loud when it is normal.
+function renderBusy(webview, label, timeoutMs) {
+  const nonce = makeNonce();
+  const seconds = Math.round((timeoutMs || 90000) / 1000);
+  const body =
+    '<div class="lop-message"><h2>Generating preview...</h2>' +
+    '<p>' + escapeHtml(label) + ' is being converted by LibreOffice.</p>' +
+    '<p><strong id="lop-elapsed">0 s</strong> <span id="lop-hint" class="lop-note"></span></p>' +
+    '<p class="lop-note">Giving up after ' + seconds + ' s.</p></div>';
+  const script =
+    'var t0 = Date.now();' +
+    'var el = document.getElementById("lop-elapsed");' +
+    'var hint = document.getElementById("lop-hint");' +
+    'setInterval(function () {' +
+    '  var s = Math.round((Date.now() - t0) / 1000);' +
+    '  el.textContent = s + " s";' +
+    // The two thresholds are the measured ones: LibreOffice's first run costs 17-20 s,
+    // and a big document legitimately runs past a minute.
+    '  hint.textContent = s > 60 ? "large documents really do take this long"' +
+    '    : s > 15 ? "the first conversion also starts LibreOffice, which is slower" : "";' +
+    '}, 1000);';
+  return shell(webview, nonce, body, script);
 }
 
 module.exports = {
